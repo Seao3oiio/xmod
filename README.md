@@ -1,0 +1,50 @@
+# xmod
+
+[![Build](https://github.com/Seao3oiio/xmod/actions/workflows/build.yml/badge.svg)](https://github.com/Seao3oiio/xmod/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+A small personal Xposed module that groups narrowly scoped Android hooks in one
+APK.
+
+## Features
+
+| Feature | Scope | Behavior |
+| --- | --- | --- |
+| GuitarTuna popup suppressor | `com.ovelin.guitartuna` | Overrides the recurring trial-prompt marker at read time without directly writing preferences or altering purchases/entitlements. |
+| Global Search to Google | `com.heytap.quicksearchbox` | Replaces the search-engine choice with Google and rewrites Baidu/Sogou result URLs as a fallback. |
+| OEM browser to Chrome | `com.heytap.browser` | Redirects incoming `http`/`https` links from the ColorOS browser to Chrome; non-web links and failures stay in the OEM browser. |
+
+Compatibility scopes for equivalent OPlus/Oppo package names are included but
+the verified device is a PLZ110 on ColorOS 16. Global Search was verified with
+`com.heytap.quicksearchbox` 11.59.5.20 and GuitarTuna with 7.96.1.
+
+## Build
+
+Requires JDK 26 and Android SDK/Build Tools 37.
+
+```sh
+./gradlew :app:testDebugUnitTest :app:assembleDebug
+```
+
+The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
+
+## Install
+
+```sh
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Enable `xmod` in Vector/LSPosed and select only the packages for the features
+you use. Keep Chrome as Android's default browser. Disable the old standalone
+GuitarTuna and Global Search modules after enabling this combined package.
+
+The application ID is `io.github.seao3oiio.xmod`.
+
+## Adding a feature
+
+Implement `XmodFeature`, register it in `XmodEntryPoint`, add its package to
+`META-INF/xposed/scope.list`, and add focused tests for pure logic.
+
+## License
+
+MIT. Product names and trademarks belong to their respective owners.
