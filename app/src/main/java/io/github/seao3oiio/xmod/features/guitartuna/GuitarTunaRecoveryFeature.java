@@ -37,25 +37,13 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
             "com.yousician.yousiciannative.GuitarTunaActivity";
     private static final String RECOVERY_PREFS =
             "io.github.seao3oiio.xmod.guitartuna_recovery";
-    private static final String LAST_RECOVERY_AT = "last_recovery_at";
-    private static final String LAST_RECOVERY_VERSION = "last_recovery_version";
     private static final String ONBOARDING_PENDING = "onboarding_pending";
+    private static final String AUTO_RESTART_PENDING = "auto_restart_pending";
 
     private static final int SAMPLE_WIDTH = 64;
     private static final int SAMPLE_HEIGHT = 128;
     private static final int TEMPLATE_WIDTH = 8;
     private static final int TEMPLATE_HEIGHT = 16;
-    private static final byte[] SPLASH_TEMPLATE = Base64.decode(
-            "LS4zLS4zLS4zLS4zLS4zLS4zLS4zLS4zLC0yLC0yLC0yLC0yLC0yLC0yLC0yLC0yKywxKywx"
-                    + "KywxKywxKywxKywxKywxKywxKisvKisvKisvKisvKisvKisvKisvKisvKSouKSouKSouKSou"
-                    + "KSouKSouKSouKSouKCktKCktKCktKCktKCktKCktKCktKCktOz1AREVIPj9CLDM1IT05IzU0"
-                    + "JicrJicrJSYqJSYqJSYqKSotJScrJScrJSYqJSYqJCUoJCUoJCUoJCUoJCUoJCUoJCUoJCUo"
-                    + "IyQnIyQnIyQnIyQnIyQnIyQnIyQnIyQnIiMmIiMmIiMmIiMmIiMmIiMmIiMmIiMmICEkICEk"
-                    + "ICEkICEkICEkICEkICEkICEkHyAjHyAjHyAjHyAjHyAjHyAjHyAjHyAjHh8hHh8hQkNFSUpM"
-                    + "JlJHGTs0Hh8hHh8hHR4gHR4gJCUnHCQkHCQkHR4gHR4gHR4gHB0fHB0fHB0fHB0fHB0fHB0f"
-                    + "HB0fHB0f",
-            Base64.DEFAULT
-    );
     private static final int SCREEN_WELCOME = 0;
     private static final int SCREEN_INSTRUMENT = 1;
     private static final int SCREEN_LEVEL = 2;
@@ -64,6 +52,16 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
     private static final int SCREEN_MICROPHONE = 5;
     private static final int SCREEN_NOTIFICATIONS = 6;
     private static final int SCREEN_TUNER = 7;
+    private static final double[] ONBOARDING_MAX_NORMALIZED_RMSE = {
+            0.10,
+            0.06,
+            0.05,
+            0.07,
+            0.07,
+            0.06,
+            0.06,
+            0.05
+    };
     private static final byte[][] ONBOARDING_TEMPLATES = {
             decodeTemplate(
                     "oJF6ZFxKX0U3TzgxUjszbko4qodlz76kKC0uLC0tNy8sMCkoUjkxa0g4oH1bybSVERogHCIm"
@@ -147,8 +145,6 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
             )
     };
 
-    private static final long FIRST_CHECK_DELAY_MILLIS = 5_000L;
-    private static final long SECOND_CHECK_DELAY_MILLIS = 10_000L;
     private static final long PROCESS_EXIT_DELAY_MILLIS = 250L;
     private static final long ONBOARDING_CHECK_INTERVAL_MILLIS = 1_000L;
     private static final long ONBOARDING_RETRY_MILLIS = 4_000L;
@@ -159,10 +155,10 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
     private static WeakReference<Activity> resumedActivity = new WeakReference<>(null);
     private static boolean compatibleVersion;
     private static long installedVersionCode = -1L;
-    private static boolean firstSplashMatched;
+    private static boolean processLaunchInitialized;
+    private static boolean allowOnboardingForCurrentProcess;
+    private static boolean startupLaunchPending;
     private static int watchdogGeneration;
-    private static Runnable firstCheckTask;
-    private static Runnable secondCheckTask;
     private static Runnable onboardingTask;
     private static long onboardingDeadline;
     private static long lastOnboardingActionAt;
@@ -174,7 +170,7 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
 
     @Override
     public String name() {
-        return "GuitarTuna stuck-splash recovery";
+        return "GuitarTuna clean-start recovery";
     }
 
     @Override
@@ -205,6 +201,30 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                         compatibleVersion = GuitarTunaRecoveryPolicy.supports(
                                 installedVersionCode
                         );
+                        Bundle savedInstanceState = (Bundle) param.args[0];
+                        if (!processLaunchInitialized) {
+                            processLaunchInitialized = true;
+                            allowOnboardingForCurrentProcess = consumeAutoRestart(activity);
+                            startupLaunchPending = true;
+                        } else if (savedInstanceState == null) {
+                            allowOnboardingForCurrentProcess = false;
+                            startupLaunchPending = true;
+                        }
+                    }
+                }
+        );
+        XposedHelpers.findAndHookMethod(
+                Activity.class,
+                "onNewIntent",
+                Intent.class,
+                new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        Activity activity = (Activity) param.thisObject;
+                        if (isTargetActivity(activity)) {
+                            allowOnboardingForCurrentProcess = false;
+                            startupLaunchPending = true;
+                        }
                     }
                 }
         );
@@ -216,10 +236,13 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                     protected void afterHookedMethod(MethodHookParam param) {
                         Activity activity = (Activity) param.thisObject;
                         if (isTargetActivity(activity) && compatibleVersion) {
-                            if (isOnboardingPending(activity)) {
+                            if (allowOnboardingForCurrentProcess
+                                    && isOnboardingPending(activity)) {
+                                startupLaunchPending = false;
                                 armOnboarding(activity);
-                            } else {
-                                armWatchdog(activity);
+                            } else if (startupLaunchPending) {
+                                startupLaunchPending = false;
+                                requestRecovery(activity);
                             }
                         }
                     }
@@ -233,7 +256,7 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                     protected void beforeHookedMethod(MethodHookParam param) {
                         Activity activity = (Activity) param.thisObject;
                         if (isTargetActivity(activity)) {
-                            disarmWatchdog(activity);
+                            disarmTasks(activity);
                         }
                     }
                 }
@@ -265,7 +288,7 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
 
     private static boolean templatesAreValid() {
         int expectedLength = TEMPLATE_WIDTH * TEMPLATE_HEIGHT * 3;
-        if (SPLASH_TEMPLATE.length != expectedLength) {
+        if (ONBOARDING_MAX_NORMALIZED_RMSE.length != ONBOARDING_TEMPLATES.length) {
             return false;
         }
         for (byte[] template : ONBOARDING_TEMPLATES) {
@@ -281,43 +304,32 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                 .getBoolean(ONBOARDING_PENDING, false);
     }
 
-    private static void armWatchdog(Activity activity) {
-        cancelWatchdogTasks();
-        cancelOnboardingTask();
-        resumedActivity = new WeakReference<>(activity);
-        firstSplashMatched = false;
-        int generation = ++watchdogGeneration;
-        firstCheckTask = () -> checkSplash(generation, true);
-        MAIN_HANDLER.postDelayed(firstCheckTask, FIRST_CHECK_DELAY_MILLIS);
+    private static boolean consumeAutoRestart(Activity activity) {
+        SharedPreferences preferences = activity.getSharedPreferences(
+                RECOVERY_PREFS,
+                Context.MODE_PRIVATE
+        );
+        if (!preferences.getBoolean(AUTO_RESTART_PENDING, false)) {
+            return false;
+        }
+        if (!preferences.edit().putBoolean(AUTO_RESTART_PENDING, false).commit()) {
+            XposedBridge.log(TAG + ": could not consume automatic restart marker");
+        }
+        return true;
     }
 
-    private static void disarmWatchdog(Activity activity) {
+    private static void disarmTasks(Activity activity) {
         if (resumedActivity.get() != activity) {
             return;
         }
         resumedActivity.clear();
-        firstSplashMatched = false;
         watchdogGeneration++;
-        cancelWatchdogTasks();
         cancelOnboardingTask();
-    }
-
-    private static void cancelWatchdogTasks() {
-        if (firstCheckTask != null) {
-            MAIN_HANDLER.removeCallbacks(firstCheckTask);
-            firstCheckTask = null;
-        }
-        if (secondCheckTask != null) {
-            MAIN_HANDLER.removeCallbacks(secondCheckTask);
-            secondCheckTask = null;
-        }
     }
 
     private static void armOnboarding(Activity activity) {
-        cancelWatchdogTasks();
         cancelOnboardingTask();
         resumedActivity = new WeakReference<>(activity);
-        firstSplashMatched = false;
         int generation = ++watchdogGeneration;
         onboardingDeadline = SystemClock.elapsedRealtime() + ONBOARDING_TIMEOUT_MILLIS;
         lastOnboardingActionAt = 0L;
@@ -396,7 +408,8 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                 && !activity.isFinishing()
                 && !activity.isDestroyed()
                 && activity.hasWindowFocus()
-                && isOnboardingPending(activity);
+                && isOnboardingPending(activity)
+                && !RECOVERY_REQUESTED.get();
     }
 
     private static void handleOnboardingSample(
@@ -422,7 +435,8 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                         bestScreen = index;
                     }
                 }
-                if (bestRmse <= 0.09) {
+                if (bestScreen >= 0
+                        && bestRmse <= ONBOARDING_MAX_NORMALIZED_RMSE[bestScreen]) {
                     screen = bestScreen;
                 }
             }
@@ -553,59 +567,6 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
         XposedBridge.log(TAG + ": entered Guitar 6-string tuner");
     }
 
-    private static void checkSplash(int generation, boolean firstCheck) {
-        Activity activity = resumedActivity.get();
-        if (!isCurrentWatchdog(activity, generation)) {
-            return;
-        }
-
-        SurfaceView surfaceView = findUnitySurface(activity);
-        if (surfaceView == null) {
-            XposedBridge.log(TAG + ": Unity surface unavailable; skipped splash check");
-            return;
-        }
-
-        final Bitmap sample;
-        try {
-            sample = Bitmap.createBitmap(
-                    SAMPLE_WIDTH,
-                    SAMPLE_HEIGHT,
-                    Bitmap.Config.ARGB_8888
-            );
-        } catch (RuntimeException | OutOfMemoryError error) {
-            XposedBridge.log(TAG + ": could not allocate splash sample");
-            return;
-        }
-
-        try {
-            PixelCopy.request(
-                    surfaceView,
-                    sample,
-                    result -> handlePixelCopy(
-                            activity,
-                            generation,
-                            sample,
-                            result,
-                            firstCheck
-                    ),
-                    MAIN_HANDLER
-            );
-        } catch (RuntimeException error) {
-            sample.recycle();
-            XposedBridge.log(TAG + ": splash sampling unavailable for this launch");
-        }
-    }
-
-    private static boolean isCurrentWatchdog(Activity activity, int generation) {
-        return activity != null
-                && generation == watchdogGeneration
-                && resumedActivity.get() == activity
-                && !activity.isFinishing()
-                && !activity.isDestroyed()
-                && activity.hasWindowFocus()
-                && !RECOVERY_REQUESTED.get();
-    }
-
     private static SurfaceView findUnitySurface(Activity activity) {
         try {
             int unitySurfaceId = activity.getResources().getIdentifier(
@@ -659,46 +620,6 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
         return (long) surfaceView.getWidth() * surfaceView.getHeight();
     }
 
-    private static void handlePixelCopy(
-            Activity activity,
-            int generation,
-            Bitmap sample,
-            int result,
-            boolean firstCheck
-    ) {
-        boolean matched = false;
-        try {
-            if (result == PixelCopy.SUCCESS && isCurrentWatchdog(activity, generation)) {
-                matched = GuitarTunaRecoveryPolicy.matchesSplash(
-                        blockAverageRgb(sample),
-                        SPLASH_TEMPLATE
-                );
-            }
-        } catch (Throwable error) {
-            XposedBridge.log(TAG + ": failed to evaluate splash sample");
-            XposedBridge.log(error);
-        } finally {
-            sample.recycle();
-        }
-
-        if (!isCurrentWatchdog(activity, generation)) {
-            return;
-        }
-        if (!matched) {
-            firstSplashMatched = false;
-            return;
-        }
-        if (firstCheck) {
-            firstSplashMatched = true;
-            secondCheckTask = () -> checkSplash(generation, false);
-            MAIN_HANDLER.postDelayed(secondCheckTask, SECOND_CHECK_DELAY_MILLIS);
-            return;
-        }
-        if (firstSplashMatched) {
-            requestRecovery(activity);
-        }
-    }
-
     private static byte[] blockAverageRgb(Bitmap source) {
         int[] pixels = new int[SAMPLE_WIDTH * SAMPLE_HEIGHT];
         source.getPixels(
@@ -740,12 +661,11 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
     }
 
     private static void requestRecovery(Activity activity) {
-        long requestedVersionCode = installedVersionCode;
-        if (!GuitarTunaRecoveryPolicy.supports(requestedVersionCode)
+        if (!GuitarTunaRecoveryPolicy.supports(installedVersionCode)
                 || !RECOVERY_REQUESTED.compareAndSet(false, true)) {
             return;
         }
-        cancelWatchdogTasks();
+        cancelOnboardingTask();
 
         Context applicationContext = activity.getApplicationContext();
         if (applicationContext == null) {
@@ -755,16 +675,6 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                 RECOVERY_PREFS,
                 Context.MODE_PRIVATE
         );
-        long now = System.currentTimeMillis();
-        if (!GuitarTunaRecoveryPolicy.canRecover(
-                recoveryPreferences.getLong(LAST_RECOVERY_AT, 0L),
-                now
-        )) {
-            RECOVERY_REQUESTED.set(false);
-            XposedBridge.log(TAG + ": recovery cooldown is active");
-            return;
-        }
-
         boolean localStateReset;
         try {
             localStateReset = resetLocalState(activity);
@@ -788,11 +698,10 @@ public final class GuitarTunaRecoveryFeature implements XmodFeature {
                     return;
                 }
                 if (!recoveryPreferences.edit()
-                        .putLong(LAST_RECOVERY_AT, now)
-                        .putLong(LAST_RECOVERY_VERSION, requestedVersionCode)
                         .putBoolean(ONBOARDING_PENDING, true)
+                        .putBoolean(AUTO_RESTART_PENDING, true)
                         .commit()) {
-                    XposedBridge.log(TAG + ": could not persist recovery cooldown");
+                    XposedBridge.log(TAG + ": could not persist onboarding marker");
                 }
                 XposedBridge.log(TAG + ": cleared local state; restarting GuitarTuna");
                 MAIN_HANDLER.postDelayed(

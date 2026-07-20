@@ -10,7 +10,7 @@ APK.
 
 | Feature | Scope | Behavior |
 | --- | --- | --- |
-| GuitarTuna helpers | `com.ovelin.guitartuna`, `com.android.launcher` | Suppresses the recurring trial prompt. On version 7.96.1 and newer, also recovers the known repeatedly matched stuck splash after 15 seconds, reopens the app through the system launcher, and completes the clean Guitar 6-string setup (at most once per 24 hours). |
+| GuitarTuna helpers | `com.ovelin.guitartuna`, `com.android.launcher` | Suppresses the recurring trial prompt. On version 7.96.1 and newer, every user launch clears local app state, reopens through the system launcher, and completes the clean Guitar 6-string setup. |
 | Global Search to Google | `com.heytap.quicksearchbox` | Keeps local suggestions while typing, then opens the submitted query as a Google search in Chrome. |
 | OEM browser to Chrome | `com.heytap.browser` | Redirects incoming `http`/`https` links from the ColorOS browser to Chrome; non-web links and failures stay in the OEM browser. |
 

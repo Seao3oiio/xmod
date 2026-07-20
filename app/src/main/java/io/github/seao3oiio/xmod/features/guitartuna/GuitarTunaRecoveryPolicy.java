@@ -2,26 +2,12 @@ package io.github.seao3oiio.xmod.features.guitartuna;
 
 final class GuitarTunaRecoveryPolicy {
     static final long MIN_VERSION_CODE = 150_917L;
-    static final long COOLDOWN_MILLIS = 24L * 60L * 60L * 1_000L;
-    private static final double MAX_NORMALIZED_RMSE = 0.02;
 
     private GuitarTunaRecoveryPolicy() {
     }
 
     static boolean supports(long versionCode) {
         return versionCode >= MIN_VERSION_CODE;
-    }
-
-    static boolean canRecover(long lastRecoveryAt, long now) {
-        if (lastRecoveryAt <= 0L) {
-            return true;
-        }
-        return now >= lastRecoveryAt
-                && now - lastRecoveryAt >= COOLDOWN_MILLIS;
-    }
-
-    static boolean matchesSplash(byte[] observedRgb, byte[] templateRgb) {
-        return normalizedRmse(observedRgb, templateRgb) <= MAX_NORMALIZED_RMSE;
     }
 
     static double normalizedRmse(byte[] observedRgb, byte[] templateRgb) {
