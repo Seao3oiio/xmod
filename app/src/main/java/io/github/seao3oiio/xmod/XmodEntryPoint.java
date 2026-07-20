@@ -1,10 +1,7 @@
 package io.github.seao3oiio.xmod;
 
-import io.github.seao3oiio.xmod.features.globalsearch.GlobalSearchGoogleFeature;
-import io.github.seao3oiio.xmod.features.guitartuna.GuitarTunaPopupFeature;
-import io.github.seao3oiio.xmod.features.guitartuna.GuitarTunaRecoveryFeature;
-import io.github.seao3oiio.xmod.features.guitartuna.GuitarTunaRestartHostFeature;
 import io.github.seao3oiio.xmod.features.browser.ChromeRedirectFeature;
+import io.github.seao3oiio.xmod.features.globalsearch.GlobalSearchGoogleFeature;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XposedBridge;
@@ -16,14 +13,6 @@ public final class XmodEntryPoint implements IXposedHookLoadPackage {
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) {
         switch (loadPackageParam.packageName) {
-            case "com.ovelin.guitartuna":
-                install(loadPackageParam, "GuitarTuna popup", GuitarTunaPopupFeature::new);
-                install(loadPackageParam, "GuitarTuna recovery", GuitarTunaRecoveryFeature::new);
-                break;
-            case "com.android.launcher":
-                install(loadPackageParam, "GuitarTuna restart host",
-                        GuitarTunaRestartHostFeature::new);
-                break;
             case "com.heytap.quicksearchbox":
             case "com.oplus.quicksearchbox":
             case "com.oppo.quicksearchbox":

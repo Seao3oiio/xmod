@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">xmod</string>
-    <string name="module_description">Personal Xposed hooks for GuitarTuna, Global Search, and redirecting OEM browser links to Chrome.</string>
+    <string name="module_description">Personal Xposed hooks for Global Search and redirecting OEM browser links to Chrome.</string>
 </resources>

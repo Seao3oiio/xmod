@@ -10,17 +10,14 @@ APK.
 
 | Feature | Scope | Behavior |
 | --- | --- | --- |
-| GuitarTuna helpers | `com.ovelin.guitartuna`, `com.android.launcher` | Suppresses the recurring trial prompt. On version 7.96.1 and newer, every user launch clears local app state, reopens through the system launcher, and completes the clean Guitar 6-string setup. |
 | Global Search to Google | `com.heytap.quicksearchbox` | Keeps local suggestions while typing, then opens the submitted query as a Google search in Chrome. |
 | OEM browser to Chrome | `com.heytap.browser` | Redirects incoming `http`/`https` links from the ColorOS browser to Chrome; non-web links and failures stay in the OEM browser. |
 
 Compatibility scopes for equivalent OPlus/Oppo package names are included but
 the verified device is a PLZ110 on ColorOS 16. Global Search was verified with
-`com.heytap.quicksearchbox` 11.59.5.20 and GuitarTuna with 7.96.1.
+`com.heytap.quicksearchbox` 11.59.5.20.
 The Global Search submission hook is intentionally version-specific and fails
 closed if the verified OEM search-bar method changes.
-GuitarTuna recovery deliberately does not restore accounts, history, consent,
-or purchase state. Android runtime permissions are kept.
 
 ## Build
 
@@ -40,7 +37,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Enable `xmod` in Vector/LSPosed and select only the packages for the features
 you use. Keep Chrome as Android's default browser. Disable the old standalone
-GuitarTuna and Global Search modules after enabling this combined package.
+Global Search module after enabling this combined package.
 
 The application ID is `io.github.seao3oiio.xmod`.
 
