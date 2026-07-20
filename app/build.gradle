@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.seao3oiio.xmod"
         minSdk = 26
         targetSdk = 37
-        versionCode = 5
-        versionName = "2.1.1"
+        versionCode = 14
+        versionName = "2.4.1"
     }
 
     buildTypes {
